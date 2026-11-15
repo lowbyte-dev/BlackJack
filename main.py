@@ -94,6 +94,7 @@ while game_running:
             print(f"💼 Bet placed! Your balance is now ${balance:.2f}")
 
             for _ in range(2):
+                print("Card drawing sound is coming here..")
                 player_hand, player_total = deal_card(player_hand, player_total)
                 dealer_hand, dealer_total = deal_card(dealer_hand, dealer_total)
 
