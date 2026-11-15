@@ -3,7 +3,7 @@
 A terminal-style Blackjack game with sounds, emojis, a 6 or 8 deck shoe and a real 3:2 payout on natural blackjacks. It runs in your terminal, and it also runs right in your browser.
 
 🎮 Play it now
-👉 Click here to play: lowbyte-dev.github.io/BlackJack 👈
+👉 Click here to play: https://lowbyte-dev.github.io/BlackJack/ 👈
 
 No install, no sign-up. Open the link, wait a few seconds for Python to load, then press the Run button.
 
