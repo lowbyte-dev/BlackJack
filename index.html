@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blackjack</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: #1c1c1e; }
+  body { padding: 10px 14px 40vh; }
+  #term {
+    margin: 0;
+    color: #d4d4d4;
+    font-family: "DejaVu Sans Mono", "Ubuntu Mono", Menlo, Consolas, monospace;
+    font-size: clamp(16px, 1.9vw, 34px);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .green { color: #3dff5c; }
+  .run {
+    font: inherit;
+    color: #fff;
+    background: #666;
+    border: 0;
+    border-radius: 3px;
+    padding: 0 0.3em;
+    cursor: pointer;
+  }
+  .run:hover:not(:disabled) { background: #7d7d7d; }
+  .run:disabled { opacity: 0.5; cursor: default; }
+  .run:focus-visible { outline: 2px solid #3dff5c; outline-offset: 2px; }
+  .answer {
+    display: inline-block;
+    min-width: 3ch;
+    color: #fff;
+    caret-color: #fff;
+    outline: none;
+    white-space: pre-wrap;
+    vertical-align: top;
+  }
+</style>
+</head>
+<body>
+<pre id="term" aria-live="polite"></pre>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+  /* This page only loads and runs your Python files:
+       main.py       - your game (edit this one)
+       webrunner.py  - small helper so input(), sounds and clear work in the browser
+       art.py        - optional, your logo file (a fallback logo is used if it is missing) */
+  const SCRIPT_FILE = "main.py";
+
+  const term = document.getElementById("term");
+  let pyodide = null;
+  let activeAnswer = null;
+  let firstRun = true;
+
+  function scrollToEnd() { window.scrollTo(0, document.body.scrollHeight); }
+  function appendText(text) { term.appendChild(document.createTextNode(text)); scrollToEnd(); }
+  function write(line) { appendText(line + "\n"); }
+
+  // Functions that the Python code calls
+  window.writeInline = (text) => appendText(text);
+  window.clearConsole = () => { term.textContent = ""; };
+  // Plays a sound and resolves when it has finished (or right away if it cannot play)
+  window.playSoundAndWait = (path) => new Promise((resolve) => {
+    try {
+      const audio = new Audio(path);
+      audio.addEventListener("ended", resolve);
+      audio.addEventListener("error", resolve);
+      audio.play().catch(resolve);
+    } catch (error) {
+      resolve();
+    }
+  });
+  window.waitForInput = () => new Promise((resolve) => {
+    const answer = document.createElement("span");
+    answer.className = "answer";
+    answer.contentEditable = "plaintext-only";
+    if (answer.contentEditable !== "plaintext-only") answer.contentEditable = "true";
+    answer.spellcheck = false;
+    answer.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const value = answer.textContent;
+      answer.replaceWith(document.createTextNode(value + "\n"));
+      activeAnswer = null;
+      resolve(value);
+    });
+    term.appendChild(answer);
+    activeAnswer = answer;
+    answer.focus();
+    scrollToEnd();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (activeAnswer && !event.target.closest(".run")) activeAnswer.focus();
+  });
+
+  async function loadText(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(path + " not found");
+    return response.text();
+  }
+
+  function addRunLine(before, after) {
+    const line = document.createElement("span");
+    line.className = "green";
+    line.append(before);
+    const button = document.createElement("button");
+    button.className = "run";
+    button.textContent = "Run";
+    button.addEventListener("click", runGame);
+    line.append(button, after + "\n");
+    term.appendChild(line);
+    return button;
+  }
+
+  async function runGame() {
+    if (!pyodide) return;
+    document.querySelectorAll(".run").forEach((b) => { b.disabled = true; });
+    if (!firstRun) term.textContent = "";
+    firstRun = false;
+    try {
+      const source = await loadText(SCRIPT_FILE);   // re-read each run, so edits show up on refresh
+      pyodide.globals.set("SCRIPT_SOURCE", source);
+      await pyodide.runPythonAsync("import webrunner\nawait webrunner.run_script(SCRIPT_SOURCE)");
+    } catch (error) {
+      write("\n" + error.message);
+    }
+    appendText("\n");
+    addRunLine("Finished. Click ", " to run again.");
+    scrollToEnd();
+  }
+
+  async function init() {
+    const firstButton = addRunLine("Click ", " to play Blackjack.");
+    firstButton.disabled = true;
+    const status = document.createElement("span");
+    status.textContent = "Loading Python...\n";
+    term.appendChild(status);
+    try {
+      pyodide = await loadPyodide();
+      pyodide.setStdout({ batched: write });
+      pyodide.setStderr({ batched: write });
+      const home = "/home/pyodide";
+      pyodide.FS.writeFile(home + "/webrunner.py", await loadText("webrunner.py"));
+      let art;
+      try { art = await loadText("art.py"); }
+      catch (e) { art = 'logo = "\\n   ♠️  ♥️   B L A C K J A C K   ♦️  ♣️\\n"\n'; }
+      pyodide.FS.writeFile(home + "/art.py", art);
+      pyodide.runPython("import sys\nsys.path.insert(0, '/home/pyodide')");
+      status.remove();
+      firstButton.disabled = false;
+    } catch (error) {
+      status.textContent = "Could not load the page's files: " + error.message +
+        "\nOpen this page through a web server (GitHub Pages, or python -m http.server), not by double-clicking the file.\n";
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
